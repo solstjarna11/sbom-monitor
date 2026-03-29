@@ -1,9 +1,14 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { ComparisonReport, ScanRecord } from "../core/types";
+import {
+  ComparisonReport,
+  DependencyGraphRecord,
+  ScanRecord
+} from "../core/types";
 import { buildScanSummary } from "../core/models";
 import { StorageAdapter } from "./storage-adapter";
 import { StorageError } from "../utils/errors";
+import { pathExists } from "../utils/paths";
 
 interface PersistedScanMetadataFile {
   repository: ScanRecord["repository"];
@@ -52,6 +57,26 @@ export class JsonFileStorageAdapter implements StorageAdapter {
     await this.writeJson(filePath, persisted);
   }
 
+  public async saveSbom(
+    repositorySlug: string,
+    scanId: string,
+    sbom: Record<string, unknown>
+  ): Promise<void> {
+    const scanDir = await this.createScanDirectory(repositorySlug, scanId);
+    const filePath = path.join(scanDir, "sbom.cdx.json");
+    await this.writeJson(filePath, sbom);
+  }
+
+  public async saveDependencyGraph(
+    repositorySlug: string,
+    scanId: string,
+    graph: DependencyGraphRecord
+  ): Promise<void> {
+    const scanDir = await this.createScanDirectory(repositorySlug, scanId);
+    const filePath = path.join(scanDir, "dependency-graph.json");
+    await this.writeJson(filePath, graph);
+  }
+
   public async getScan(scanId: string): Promise<ScanRecord> {
     await this.ensureDirectories();
 
@@ -61,14 +86,29 @@ export class JsonFileStorageAdapter implements StorageAdapter {
       `Scan not found: ${scanId}`
     );
 
+    const dependencyGraphPath = path.join(
+      path.dirname(metadataFilePath),
+      "dependency-graph.json"
+    );
+
+    const dependencyGraph = (await pathExists(dependencyGraphPath))
+      ? await this.readJson<DependencyGraphRecord>(
+          dependencyGraphPath,
+          `Dependency graph not found for scan: ${scanId}`
+        )
+      : undefined;
+
+    const components = dependencyGraph?.components ?? [];
+    const dependencyEdges = dependencyGraph?.edges ?? [];
+
     return {
       repository: persisted.repository,
       metadata: persisted.metadata,
-      components: [],
-      dependencyEdges: [],
+      components,
+      dependencyEdges,
       findings: [],
       summary: buildScanSummary({
-        components: [],
+        components,
         findings: []
       })
     };
@@ -105,14 +145,30 @@ export class JsonFileStorageAdapter implements StorageAdapter {
             `Unable to read scan metadata file: ${metadataFilePath}`
           );
 
+          const dependencyGraphPath = path.join(
+            repositoryPath,
+            scanEntry.name,
+            "dependency-graph.json"
+          );
+
+          const dependencyGraph = (await pathExists(dependencyGraphPath))
+            ? await this.readJson<DependencyGraphRecord>(
+                dependencyGraphPath,
+                `Unable to read dependency graph file: ${dependencyGraphPath}`
+              )
+            : undefined;
+
+          const components = dependencyGraph?.components ?? [];
+          const dependencyEdges = dependencyGraph?.edges ?? [];
+
           scans.push({
             repository: persisted.repository,
             metadata: persisted.metadata,
-            components: [],
-            dependencyEdges: [],
+            components,
+            dependencyEdges,
             findings: [],
             summary: buildScanSummary({
-              components: [],
+              components,
               findings: []
             })
           });

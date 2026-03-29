@@ -2,6 +2,8 @@ import path from "node:path";
 import { buildScanSummary } from "../core/models";
 import { prepareRepository, PrepareRepositoryInput } from "../core/repository-intake";
 import { ScanMetadata, ScanRecord } from "../core/types";
+import { NpmDependencyGraphProvider } from "../providers/npm-dependency-graph-provider";
+import { NpmSbomProvider } from "../providers/npm-sbom-provider";
 import { StorageAdapter } from "../storage/storage-adapter";
 
 export interface CreateInitialScanInput {
@@ -12,6 +14,9 @@ export interface CreateInitialScanInput {
 }
 
 export class ScanService {
+  private readonly sbomProvider = new NpmSbomProvider();
+  private readonly dependencyGraphProvider = new NpmDependencyGraphProvider();
+
   public constructor(private readonly storage: StorageAdapter) {}
 
   public async createInitialScan(
@@ -43,34 +48,58 @@ export class ScanService {
       scanId
     );
 
+    const sbom = await this.sbomProvider.generateSbom({
+      repositoryPath: preparedRepository.workingDirectory,
+      projectFiles: preparedRepository.repository.projectFiles,
+    });
+
+    const dependencyGraph =
+      await this.dependencyGraphProvider.generateDependencyGraph({
+        repositoryId: preparedRepository.repository.id,
+        repositoryPath: preparedRepository.workingDirectory,
+        projectFiles: preparedRepository.repository.projectFiles,
+        scanId,
+        generatedAt: scanTimestamp
+      });
+
     const metadata: ScanMetadata = {
       id: scanId,
       repositoryId: preparedRepository.repository.id,
       scanRoot,
       startedAt: scanTimestamp,
-      completedAt: scanTimestamp,
-      status: "prepared",
+      completedAt: new Date().toISOString(),
+      status: "completed",
       toolVersion: "0.1.0",
       scannerName: "sbom-monitor",
       notes: [
-        "Repository prepared and metadata saved.",
-        "SBOM generation and analyzers are not implemented in this stage."
+        "Repository prepared.",
+        "CycloneDX SBOM generated for npm project.",
+        "Normalized dependency graph generated from npm lockfile or dependency tree."
       ]
     };
 
     const scan: ScanRecord = {
       repository: preparedRepository.repository,
       metadata,
-      components: [],
-      dependencyEdges: [],
+      components: dependencyGraph.components,
+      dependencyEdges: dependencyGraph.edges,
       findings: [],
       summary: buildScanSummary({
-        components: [],
+        components: dependencyGraph.components,
         findings: []
       })
     };
 
+    if (sbom !== undefined) {
+      await this.storage.saveSbom(scan.repository.slug, scan.metadata.id, sbom);
+    }
+    await this.storage.saveDependencyGraph(
+      scan.repository.slug,
+      scan.metadata.id,
+      dependencyGraph
+    );
     await this.storage.saveScan(scan);
+
     return scan;
   }
 

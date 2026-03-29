@@ -79,6 +79,7 @@ export interface ComponentRecord {
   relationship: DependencyRelationship;
   scope: DependencyScope;
   direct: boolean;
+  transitive: boolean;
   devDependency: boolean;
   metadata: Record<string, string | number | boolean | null>;
 }
@@ -88,6 +89,16 @@ export interface DependencyEdge {
   toComponentId: string;
   relationship: DependencyRelationship;
   scope: DependencyScope;
+}
+
+export interface DependencyGraphRecord {
+  schemaVersion: "1.0";
+  packageManager: "npm";
+  repositoryId: string;
+  scanId: string;
+  generatedAt: string;
+  components: ComponentRecord[];
+  edges: DependencyEdge[];
 }
 
 export interface Finding {
