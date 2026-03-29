@@ -1,8 +1,14 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ComparisonReport, ScanRecord } from "../core/types";
+import { buildScanSummary } from "../core/models";
 import { StorageAdapter } from "./storage-adapter";
 import { StorageError } from "../utils/errors";
+
+interface PersistedScanMetadataFile {
+  repository: ScanRecord["repository"];
+  metadata: ScanRecord["metadata"];
+}
 
 export class JsonFileStorageAdapter implements StorageAdapter {
   private readonly scansDir: string;
@@ -15,30 +21,106 @@ export class JsonFileStorageAdapter implements StorageAdapter {
     this.reportsDir = path.join(rootDir, "reports");
   }
 
+  public getRootDirectory(): string {
+    return this.rootDir;
+  }
+
+  public async createScanDirectory(
+    repositorySlug: string,
+    scanId: string
+  ): Promise<string> {
+    await this.ensureDirectories();
+    const scanDir = this.getScanDirectory(repositorySlug, scanId);
+    await mkdir(scanDir, { recursive: true });
+    return scanDir;
+  }
+
   public async saveScan(scan: ScanRecord): Promise<void> {
     await this.ensureDirectories();
-    const filePath = path.join(this.scansDir, `${scan.metadata.id}.json`);
-    await this.writeJson(filePath, scan);
+
+    const scanDir = await this.createScanDirectory(
+      scan.repository.slug,
+      scan.metadata.id
+    );
+
+    const filePath = path.join(scanDir, "metadata.json");
+    const persisted: PersistedScanMetadataFile = {
+      repository: scan.repository,
+      metadata: scan.metadata
+    };
+
+    await this.writeJson(filePath, persisted);
   }
 
   public async getScan(scanId: string): Promise<ScanRecord> {
     await this.ensureDirectories();
-    const filePath = path.join(this.scansDir, `${scanId}.json`);
-    return this.readJson<ScanRecord>(filePath, `Scan not found: ${scanId}`);
+
+    const metadataFilePath = await this.findScanMetadataFile(scanId);
+    const persisted = await this.readJson<PersistedScanMetadataFile>(
+      metadataFilePath,
+      `Scan not found: ${scanId}`
+    );
+
+    return {
+      repository: persisted.repository,
+      metadata: persisted.metadata,
+      components: [],
+      dependencyEdges: [],
+      findings: [],
+      summary: buildScanSummary({
+        components: [],
+        findings: []
+      })
+    };
   }
 
   public async listScans(): Promise<ScanRecord[]> {
     await this.ensureDirectories();
-    const files = await readdir(this.scansDir, { withFileTypes: true });
-    const scanFiles = files
-      .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
-      .map((entry) => path.join(this.scansDir, entry.name));
 
-    const scans = await Promise.all(
-      scanFiles.map((filePath) =>
-        this.readJson<ScanRecord>(filePath, `Unable to read scan file: ${filePath}`)
-      )
-    );
+    const repositoryEntries = await readdir(this.scansDir, { withFileTypes: true });
+    const scans: ScanRecord[] = [];
+
+    for (const repositoryEntry of repositoryEntries) {
+      if (!repositoryEntry.isDirectory()) {
+        continue;
+      }
+
+      const repositoryPath = path.join(this.scansDir, repositoryEntry.name);
+      const scanEntries = await readdir(repositoryPath, { withFileTypes: true });
+
+      for (const scanEntry of scanEntries) {
+        if (!scanEntry.isDirectory()) {
+          continue;
+        }
+
+        const metadataFilePath = path.join(
+          repositoryPath,
+          scanEntry.name,
+          "metadata.json"
+        );
+
+        try {
+          const persisted = await this.readJson<PersistedScanMetadataFile>(
+            metadataFilePath,
+            `Unable to read scan metadata file: ${metadataFilePath}`
+          );
+
+          scans.push({
+            repository: persisted.repository,
+            metadata: persisted.metadata,
+            components: [],
+            dependencyEdges: [],
+            findings: [],
+            summary: buildScanSummary({
+              components: [],
+              findings: []
+            })
+          });
+        } catch {
+          continue;
+        }
+      }
+    }
 
     return scans.sort((left, right) =>
       left.metadata.startedAt.localeCompare(right.metadata.startedAt)
@@ -60,10 +142,36 @@ export class JsonFileStorageAdapter implements StorageAdapter {
     );
   }
 
-  public async saveRenderedReport(scan: ScanRecord): Promise<void> {
-    await this.ensureDirectories();
-    const filePath = path.join(this.reportsDir, `${scan.metadata.id}.json`);
-    await this.writeJson(filePath, scan);
+  private getScanDirectory(repositorySlug: string, scanId: string): string {
+    return path.join(this.scansDir, repositorySlug, scanId);
+  }
+
+  private async findScanMetadataFile(scanId: string): Promise<string> {
+    const repositoryEntries = await readdir(this.scansDir, { withFileTypes: true });
+
+    for (const repositoryEntry of repositoryEntries) {
+      if (!repositoryEntry.isDirectory()) {
+        continue;
+      }
+
+      const metadataFilePath = path.join(
+        this.scansDir,
+        repositoryEntry.name,
+        scanId,
+        "metadata.json"
+      );
+
+      try {
+        await readFile(metadataFilePath, "utf-8");
+        return metadataFilePath;
+      } catch {
+        continue;
+      }
+    }
+
+    throw new StorageError(`Scan not found: ${scanId}`, {
+      details: { scanId }
+    });
   }
 
   private async ensureDirectories(): Promise<void> {

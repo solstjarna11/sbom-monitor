@@ -27,24 +27,40 @@ export type FindingCategory =
   | "integrity"
   | "metadata";
 
+export type RepositorySourceType = "local" | "git-url";
+
+export interface RepositoryProjectFiles {
+  packageJson: string;
+  packageLockJson?: string;
+  npmShrinkwrapJson?: string;
+  npmrc?: string;
+  githubWorkflows: string[];
+}
+
 export interface RepositoryMetadata {
   id: string;
+  slug: string;
   name: string;
   path: string;
+  source: string;
+  sourceType: RepositorySourceType;
   branch?: string;
   commitHash?: string;
   remoteUrl?: string;
+  selectedRef?: string;
   ecosystem: Ecosystem;
   manifestFiles: string[];
+  projectFiles: RepositoryProjectFiles;
   createdAt: string;
 }
 
 export interface ScanMetadata {
   id: string;
   repositoryId: string;
+  scanRoot: string;
   startedAt: string;
   completedAt: string;
-  status: "completed" | "failed";
+  status: "prepared" | "completed" | "failed";
   toolVersion: string;
   scannerName: string;
   notes?: string[];

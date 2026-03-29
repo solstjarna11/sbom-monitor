@@ -1,20 +1,14 @@
 import path from "node:path";
-import {
-  ComponentRecord,
-  Finding,
-  RepositoryMetadata,
-  ScanMetadata,
-  ScanRecord
-} from "../core/types";
 import { buildScanSummary } from "../core/models";
+import { prepareRepository, PrepareRepositoryInput } from "../core/repository-intake";
+import { ScanMetadata, ScanRecord } from "../core/types";
 import { StorageAdapter } from "../storage/storage-adapter";
-import { RepositoryNotFoundError } from "../utils/errors";
-import { pathExists, toAbsolutePath } from "../utils/paths";
 
 export interface CreateInitialScanInput {
   repositoryPath: string;
   repositoryName?: string;
   scanId?: string;
+  selectedRef?: string;
 }
 
 export class ScanService {
@@ -23,52 +17,56 @@ export class ScanService {
   public async createInitialScan(
     input: CreateInitialScanInput
   ): Promise<ScanRecord> {
-    const repositoryPath = toAbsolutePath(input.repositoryPath);
+    const scanTimestamp = new Date().toISOString();
+    const scanId = input.scanId ?? `scan-${Date.now()}`;
+    const artifactsRoot = this.storage.getRootDirectory();
 
-    if (!(await pathExists(repositoryPath))) {
-      throw new RepositoryNotFoundError(
-        `Repository path does not exist: ${repositoryPath}`
-      );
+    const prepareInput: PrepareRepositoryInput = {
+      repositoryPathOrUrl: input.repositoryPath,
+      artifactsRoot,
+      scanId,
+      scanTimestamp
+    };
+
+    if (input.repositoryName !== undefined) {
+      prepareInput.repositoryName = input.repositoryName;
     }
 
-    const now = new Date().toISOString();
-    const repositoryId = this.buildRepositoryId(repositoryPath);
-    const scanId = input.scanId ?? `scan-${Date.now()}`;
+    if (input.selectedRef !== undefined) {
+      prepareInput.selectedRef = input.selectedRef;
+    }
 
-    const repository: RepositoryMetadata = {
-      id: repositoryId,
-      name: input.repositoryName ?? path.basename(repositoryPath),
-      path: repositoryPath,
-      ecosystem: "npm",
-      manifestFiles: [],
-      createdAt: now
-    };
+    const preparedRepository = await prepareRepository(prepareInput);
+
+    const scanRoot = await this.storage.createScanDirectory(
+      preparedRepository.repository.slug,
+      scanId
+    );
 
     const metadata: ScanMetadata = {
       id: scanId,
-      repositoryId,
-      startedAt: now,
-      completedAt: now,
-      status: "completed",
+      repositoryId: preparedRepository.repository.id,
+      scanRoot,
+      startedAt: scanTimestamp,
+      completedAt: scanTimestamp,
+      status: "prepared",
       toolVersion: "0.1.0",
       scannerName: "sbom-monitor",
       notes: [
-        "Initial scaffold scan; external integrations are intentionally not implemented in this stage."
+        "Repository prepared and metadata saved.",
+        "SBOM generation and analyzers are not implemented in this stage."
       ]
     };
 
-    const components: ComponentRecord[] = [];
-    const findings: Finding[] = [];
-
     const scan: ScanRecord = {
-      repository,
+      repository: preparedRepository.repository,
       metadata,
-      components,
+      components: [],
       dependencyEdges: [],
-      findings,
+      findings: [],
       summary: buildScanSummary({
-        components,
-        findings
+        components: [],
+        findings: []
       })
     };
 
@@ -76,7 +74,11 @@ export class ScanService {
     return scan;
   }
 
-  private buildRepositoryId(repositoryPath: string): string {
-    return repositoryPath.replaceAll(/[^\w.-]+/g, "_");
+  public static getScanMetadataFilePath(
+    artifactsRoot: string,
+    repositorySlug: string,
+    scanId: string
+  ): string {
+    return path.join(artifactsRoot, "scans", repositorySlug, scanId, "metadata.json");
   }
 }

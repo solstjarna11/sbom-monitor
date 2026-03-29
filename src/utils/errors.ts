@@ -36,6 +36,27 @@ export class RepositoryNotFoundError extends AppError {
   }
 }
 
+export class InvalidRepositoryError extends AppError {
+  public constructor(message: string, options: AppErrorOptions = {}) {
+    super("INVALID_REPOSITORY", message, { ...options, exitCode: 2 });
+  }
+}
+
+export class RepositoryPreparationError extends AppError {
+  public constructor(message: string, options: AppErrorOptions = {}) {
+    super("REPOSITORY_PREPARATION_ERROR", message, {
+      ...options,
+      exitCode: 2
+    });
+  }
+}
+
+export class GitCommandError extends AppError {
+  public constructor(message: string, options: AppErrorOptions = {}) {
+    super("GIT_COMMAND_ERROR", message, { ...options, exitCode: 2 });
+  }
+}
+
 export class ValidationError extends AppError {
   public constructor(message: string, options: AppErrorOptions = {}) {
     super("VALIDATION_ERROR", message, { ...options, exitCode: 2 });

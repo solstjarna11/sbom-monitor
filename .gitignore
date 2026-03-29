@@ -5,3 +5,5 @@ data/scans/*.json
 data/reports/*.json
 data/comparisons/*.json
 instructions/
+artifacts/
+tmp*/
