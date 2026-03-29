@@ -90,13 +90,13 @@ export class MaintenanceAnalyzer implements Analyzer {
           detectedAt: context.timestamp
         };
 
-        if (component !== undefined) {
+        if (component === undefined) {
+          findings.push(findingBase);
+        } else {
           findings.push({
             ...findingBase,
             componentId: component.id
           });
-        } else {
-          findings.push(findingBase);
         }
       }
 
@@ -141,13 +141,13 @@ export class MaintenanceAnalyzer implements Analyzer {
         detectedAt: context.timestamp
       };
 
-      if (component !== undefined) {
+      if (component === undefined) {
+        findings.push(findingBase);
+      } else {
         findings.push({
           ...findingBase,
           componentId: component.id
         });
-      } else {
-        findings.push(findingBase);
       }
     }
 
@@ -203,6 +203,6 @@ function parseMajor(version: string | undefined): number | undefined {
     return undefined;
   }
 
-  const match = version.match(/^(\d+)/);
-  return match !== null ? Number(match[1]) : undefined;
+  const match = new RegExp(/^(\d+)/).exec(version);
+  return match === null ? undefined : Number(match[1]);
 }

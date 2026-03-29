@@ -67,9 +67,9 @@ export class NecessityAnalyzer implements Analyzer {
       }
     }
 
-    const productionScriptKeys = ["start", "serve", "preview", "build"];
+    const productionScriptKeys = new Set(["start", "serve", "preview", "build"]);
     const productionScripts = Object.entries(manifest.scripts ?? {})
-      .filter(([key]) => productionScriptKeys.includes(key))
+      .filter(([key]) => productionScriptKeys.has(key))
       .map(([key, value]) => `${key}: ${value}`)
       .join("\n");
 
@@ -191,7 +191,7 @@ export class NecessityAnalyzer implements Analyzer {
       new RegExp(`['"\`]${escapedName}['"\`]`),
       new RegExp(`require\\(\\s*['"\`]${escapedName}['"\`]\\s*\\)`),
       new RegExp(`from\\s+['"\`]${escapedName}['"\`]`),
-      new RegExp(`\\b${simpleName}\\b`)
+      new RegExp(String.raw`\b${simpleName}\b`)
     ];
 
     return patterns.some((pattern) => pattern.test(text));
@@ -199,5 +199,5 @@ export class NecessityAnalyzer implements Analyzer {
 }
 
 function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
