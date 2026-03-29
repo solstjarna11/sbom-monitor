@@ -1,3 +1,5 @@
+// src/providers/npm-dependency-graph-provider.ts
+
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {

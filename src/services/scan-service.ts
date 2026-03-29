@@ -5,6 +5,7 @@ import { ScanMetadata, ScanRecord } from "../core/types";
 import { NpmDependencyGraphProvider } from "../providers/npm-dependency-graph-provider";
 import { NpmSbomProvider } from "../providers/npm-sbom-provider";
 import { StorageAdapter } from "../storage/storage-adapter";
+import { AnalyzerEngine } from "../analyzers/analyzer-engine";
 
 export interface CreateInitialScanInput {
   repositoryPath: string;
@@ -16,6 +17,7 @@ export interface CreateInitialScanInput {
 export class ScanService {
   private readonly sbomProvider = new NpmSbomProvider();
   private readonly dependencyGraphProvider = new NpmDependencyGraphProvider();
+  private readonly analyzerEngine = new AnalyzerEngine();
 
   public constructor(private readonly storage: StorageAdapter) {}
 
@@ -48,11 +50,13 @@ export class ScanService {
       scanId
     );
 
+    // --- SBOM ---
     const sbom = await this.sbomProvider.generateSbom({
       repositoryPath: preparedRepository.workingDirectory,
-      projectFiles: preparedRepository.repository.projectFiles,
+      projectFiles: preparedRepository.repository.projectFiles
     });
 
+    // --- Dependency Graph ---
     const dependencyGraph =
       await this.dependencyGraphProvider.generateDependencyGraph({
         repositoryId: preparedRepository.repository.id,
@@ -62,6 +66,16 @@ export class ScanService {
         generatedAt: scanTimestamp
       });
 
+    // --- Analysis ---
+    const findings = await this.analyzerEngine.run({
+      repositoryPath: preparedRepository.workingDirectory,
+      dependencyGraph,
+      components: dependencyGraph.components,
+      scanId,
+      timestamp: scanTimestamp
+    });
+
+    // --- Metadata (after analysis completes) ---
     const metadata: ScanMetadata = {
       id: scanId,
       repositoryId: preparedRepository.repository.id,
@@ -74,7 +88,8 @@ export class ScanService {
       notes: [
         "Repository prepared.",
         "CycloneDX SBOM generated for npm project.",
-        "Normalized dependency graph generated from npm lockfile or dependency tree."
+        "Normalized dependency graph generated from npm lockfile or dependency tree.",
+        "Analysis completed (necessity, vulnerabilities, maintenance, source trust)."
       ]
     };
 
@@ -83,21 +98,24 @@ export class ScanService {
       metadata,
       components: dependencyGraph.components,
       dependencyEdges: dependencyGraph.edges,
-      findings: [],
+      findings,
       summary: buildScanSummary({
         components: dependencyGraph.components,
-        findings: []
+        findings
       })
     };
 
+    // --- Persistence (ordered) ---
     if (sbom !== undefined) {
       await this.storage.saveSbom(scan.repository.slug, scan.metadata.id, sbom);
     }
+
     await this.storage.saveDependencyGraph(
       scan.repository.slug,
       scan.metadata.id,
       dependencyGraph
     );
+
     await this.storage.saveScan(scan);
 
     return scan;
@@ -108,6 +126,12 @@ export class ScanService {
     repositorySlug: string,
     scanId: string
   ): string {
-    return path.join(artifactsRoot, "scans", repositorySlug, scanId, "metadata.json");
+    return path.join(
+      artifactsRoot,
+      "scans",
+      repositorySlug,
+      scanId,
+      "metadata.json"
+    );
   }
 }

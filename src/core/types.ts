@@ -1,3 +1,5 @@
+// src/core/types.ts
+
 export type Ecosystem =
   | "npm"
   | "node"
@@ -79,7 +81,7 @@ export interface ComponentRecord {
   relationship: DependencyRelationship;
   scope: DependencyScope;
   direct: boolean;
-  transitive: boolean;
+  transitive: boolean
   devDependency: boolean;
   metadata: Record<string, string | number | boolean | null>;
 }
@@ -108,7 +110,8 @@ export interface Finding {
   category: FindingCategory;
   title: string;
   description: string;
-  recommendation?: string;
+  evidence: Record<string, unknown>;
+  remediation: string;
   references: string[];
   detectedAt: string;
 }
