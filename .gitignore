@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.log
+data/scans/*.json
+data/reports/*.json
+data/comparisons/*.json
+instructions/
