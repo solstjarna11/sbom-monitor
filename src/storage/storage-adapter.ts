@@ -1,4 +1,10 @@
-import { ComparisonReport, DependencyGraphRecord, ScanRecord } from "../core/types";
+import {
+  ComparisonReport,
+  DependencyGraphRecord,
+  Finding,
+  ScanRecord,
+  ScanSummary
+} from "../core/types";
 
 export interface StorageAdapter {
   getRootDirectory(): string;
@@ -13,6 +19,16 @@ export interface StorageAdapter {
     repositorySlug: string,
     scanId: string,
     graph: DependencyGraphRecord
+  ): Promise<void>;
+  saveFindings(
+    repositorySlug: string,
+    scanId: string,
+    findings: Finding[]
+  ): Promise<void>;
+  saveSummary(
+    repositorySlug: string,
+    scanId: string,
+    summary: ScanSummary
   ): Promise<void>;
   getScan(scanId: string): Promise<ScanRecord>;
   listScans(): Promise<ScanRecord[]>;

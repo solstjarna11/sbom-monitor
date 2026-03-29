@@ -50,13 +50,11 @@ export class ScanService {
       scanId
     );
 
-    // --- SBOM ---
     const sbom = await this.sbomProvider.generateSbom({
       repositoryPath: preparedRepository.workingDirectory,
       projectFiles: preparedRepository.repository.projectFiles
     });
 
-    // --- Dependency Graph ---
     const dependencyGraph =
       await this.dependencyGraphProvider.generateDependencyGraph({
         repositoryId: preparedRepository.repository.id,
@@ -66,16 +64,20 @@ export class ScanService {
         generatedAt: scanTimestamp
       });
 
-    // --- Analysis ---
     const findings = await this.analyzerEngine.run({
       repositoryPath: preparedRepository.workingDirectory,
+      projectFiles: preparedRepository.repository.projectFiles,
       dependencyGraph,
       components: dependencyGraph.components,
       scanId,
       timestamp: scanTimestamp
     });
 
-    // --- Metadata (after analysis completes) ---
+    const summary = buildScanSummary({
+      components: dependencyGraph.components,
+      findings
+    });
+
     const metadata: ScanMetadata = {
       id: scanId,
       repositoryId: preparedRepository.repository.id,
@@ -87,9 +89,9 @@ export class ScanService {
       scannerName: "sbom-monitor",
       notes: [
         "Repository prepared.",
-        "CycloneDX SBOM generated for npm project.",
+        "CycloneDX SBOM generated for npm project when available.",
         "Normalized dependency graph generated from npm lockfile or dependency tree.",
-        "Analysis completed (necessity, vulnerabilities, maintenance, source trust)."
+        "A03-oriented analysis completed (necessity, vulnerabilities, maintenance, source trust)."
       ]
     };
 
@@ -99,13 +101,9 @@ export class ScanService {
       components: dependencyGraph.components,
       dependencyEdges: dependencyGraph.edges,
       findings,
-      summary: buildScanSummary({
-        components: dependencyGraph.components,
-        findings
-      })
+      summary
     };
 
-    // --- Persistence (ordered) ---
     if (sbom !== undefined) {
       await this.storage.saveSbom(scan.repository.slug, scan.metadata.id, sbom);
     }
@@ -114,6 +112,18 @@ export class ScanService {
       scan.repository.slug,
       scan.metadata.id,
       dependencyGraph
+    );
+
+    await this.storage.saveFindings(
+      scan.repository.slug,
+      scan.metadata.id,
+      findings
+    );
+
+    await this.storage.saveSummary(
+      scan.repository.slug,
+      scan.metadata.id,
+      summary
     );
 
     await this.storage.saveScan(scan);

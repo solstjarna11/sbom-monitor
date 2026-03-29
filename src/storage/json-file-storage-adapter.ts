@@ -3,7 +3,9 @@ import path from "node:path";
 import {
   ComparisonReport,
   DependencyGraphRecord,
-  ScanRecord
+  Finding,
+  ScanRecord,
+  ScanSummary
 } from "../core/types";
 import { buildScanSummary } from "../core/models";
 import { StorageAdapter } from "./storage-adapter";
@@ -77,6 +79,26 @@ export class JsonFileStorageAdapter implements StorageAdapter {
     await this.writeJson(filePath, graph);
   }
 
+  public async saveFindings(
+    repositorySlug: string,
+    scanId: string,
+    findings: Finding[]
+  ): Promise<void> {
+    const scanDir = await this.createScanDirectory(repositorySlug, scanId);
+    const filePath = path.join(scanDir, "findings.json");
+    await this.writeJson(filePath, findings);
+  }
+
+  public async saveSummary(
+    repositorySlug: string,
+    scanId: string,
+    summary: ScanSummary
+  ): Promise<void> {
+    const scanDir = await this.createScanDirectory(repositorySlug, scanId);
+    const filePath = path.join(scanDir, "summary.json");
+    await this.writeJson(filePath, summary);
+  }
+
   public async getScan(scanId: string): Promise<ScanRecord> {
     await this.ensureDirectories();
 
@@ -86,10 +108,10 @@ export class JsonFileStorageAdapter implements StorageAdapter {
       `Scan not found: ${scanId}`
     );
 
-    const dependencyGraphPath = path.join(
-      path.dirname(metadataFilePath),
-      "dependency-graph.json"
-    );
+    const scanDir = path.dirname(metadataFilePath);
+    const dependencyGraphPath = path.join(scanDir, "dependency-graph.json");
+    const findingsPath = path.join(scanDir, "findings.json");
+    const summaryPath = path.join(scanDir, "summary.json");
 
     const dependencyGraph = (await pathExists(dependencyGraphPath))
       ? await this.readJson<DependencyGraphRecord>(
@@ -98,19 +120,36 @@ export class JsonFileStorageAdapter implements StorageAdapter {
         )
       : undefined;
 
+    const findings = (await pathExists(findingsPath))
+      ? await this.readJson<Finding[]>(
+          findingsPath,
+          `Findings not found for scan: ${scanId}`
+        )
+      : [];
+
+    const storedSummary = (await pathExists(summaryPath))
+      ? await this.readJson<ScanSummary>(
+          summaryPath,
+          `Summary not found for scan: ${scanId}`
+        )
+      : undefined;
+
     const components = dependencyGraph?.components ?? [];
     const dependencyEdges = dependencyGraph?.edges ?? [];
+    const summary =
+      storedSummary ??
+      buildScanSummary({
+        components,
+        findings
+      });
 
     return {
       repository: persisted.repository,
       metadata: persisted.metadata,
       components,
       dependencyEdges,
-      findings: [],
-      summary: buildScanSummary({
-        components,
-        findings: []
-      })
+      findings,
+      summary
     };
   }
 
@@ -133,22 +172,16 @@ export class JsonFileStorageAdapter implements StorageAdapter {
           continue;
         }
 
-        const metadataFilePath = path.join(
-          repositoryPath,
-          scanEntry.name,
-          "metadata.json"
-        );
+        const scanDir = path.join(repositoryPath, scanEntry.name);
+        const metadataFilePath = path.join(scanDir, "metadata.json");
+        const dependencyGraphPath = path.join(scanDir, "dependency-graph.json");
+        const findingsPath = path.join(scanDir, "findings.json");
+        const summaryPath = path.join(scanDir, "summary.json");
 
         try {
           const persisted = await this.readJson<PersistedScanMetadataFile>(
             metadataFilePath,
             `Unable to read scan metadata file: ${metadataFilePath}`
-          );
-
-          const dependencyGraphPath = path.join(
-            repositoryPath,
-            scanEntry.name,
-            "dependency-graph.json"
           );
 
           const dependencyGraph = (await pathExists(dependencyGraphPath))
@@ -158,19 +191,36 @@ export class JsonFileStorageAdapter implements StorageAdapter {
               )
             : undefined;
 
+          const findings = (await pathExists(findingsPath))
+            ? await this.readJson<Finding[]>(
+                findingsPath,
+                `Unable to read findings file: ${findingsPath}`
+              )
+            : [];
+
+          const storedSummary = (await pathExists(summaryPath))
+            ? await this.readJson<ScanSummary>(
+                summaryPath,
+                `Unable to read summary file: ${summaryPath}`
+              )
+            : undefined;
+
           const components = dependencyGraph?.components ?? [];
           const dependencyEdges = dependencyGraph?.edges ?? [];
+          const summary =
+            storedSummary ??
+            buildScanSummary({
+              components,
+              findings
+            });
 
           scans.push({
             repository: persisted.repository,
             metadata: persisted.metadata,
             components,
             dependencyEdges,
-            findings: [],
-            summary: buildScanSummary({
-              components,
-              findings: []
-            })
+            findings,
+            summary
           });
         } catch {
           continue;

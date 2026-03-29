@@ -1,4 +1,6 @@
-import { Analyzer, AnalyzerContext } from "./types";
+// src/analyzers/analyzer-engine.ts
+
+import { AnalyzerContext, Analyzer } from "./types";
 import { Finding } from "../core/types";
 import { NecessityAnalyzer } from "./necessity-analyzer";
 import { VulnerabilityAnalyzer } from "./vulnerability-analyzer";
@@ -14,13 +16,13 @@ export class AnalyzerEngine {
   ];
 
   public async run(context: AnalyzerContext): Promise<Finding[]> {
-    const results: Finding[] = [];
+    const findings: Finding[] = [];
 
     for (const analyzer of this.analyzers) {
-      const findings = await analyzer.analyze(context);
-      results.push(...findings);
+      const analyzerFindings = await analyzer.analyze(context);
+      findings.push(...analyzerFindings);
     }
 
-    return results;
+    return findings;
   }
 }
