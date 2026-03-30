@@ -1,5 +1,3 @@
-// src/core/types.ts
-
 export type Ecosystem =
   | "npm"
   | "node"
@@ -58,6 +56,7 @@ export interface RepositoryMetadata {
 
 export interface ScanMetadata {
   id: string;
+  selectedRef?: string | undefined;
   repositoryId: string;
   scanRoot: string;
   startedAt: string;
@@ -65,7 +64,7 @@ export interface ScanMetadata {
   status: "prepared" | "completed" | "failed";
   toolVersion: string;
   scannerName: string;
-  notes?: string[];
+  notes?: string[] | undefined;
 }
 
 export interface ComponentRecord {
@@ -81,7 +80,7 @@ export interface ComponentRecord {
   relationship: DependencyRelationship;
   scope: DependencyScope;
   direct: boolean;
-  transitive: boolean
+  transitive: boolean;
   devDependency: boolean;
   metadata: Record<string, string | number | boolean | null>;
 }
@@ -138,25 +137,41 @@ export interface ComponentVersionChange {
   componentName: string;
   previousVersion: string;
   currentVersion: string;
+  changeType: "upgraded" | "downgraded" | "changed";
+  directDependency: boolean;
+}
+
+export interface ComparisonFindingDelta {
+  added: Finding[];
+  removed: Finding[];
+  introducedVulnerabilities: Finding[];
+  resolvedVulnerabilities: Finding[];
+  introducedTrustAndIntegrityFindings: Finding[];
+  removedTrustAndIntegrityFindings: Finding[];
 }
 
 export interface ComparisonReport {
   id: string;
+  repositoryId: string;
+  repositorySlug: string;
   baselineScanId: string;
   targetScanId: string;
   generatedAt: string;
-  newComponents: ComponentRecord[];
-  removedComponents: ComponentRecord[];
-  changedComponents: ComponentVersionChange[];
-  findingsDelta: {
-    added: Finding[];
-    removed: Finding[];
-  };
+  addedDependencies: ComponentRecord[];
+  removedDependencies: ComponentRecord[];
+  changedDependencies: ComponentVersionChange[];
+  findingsDelta: ComparisonFindingDelta;
   summary: {
-    newComponentCount: number;
-    removedComponentCount: number;
-    changedComponentCount: number;
+    addedDependencyCount: number;
+    removedDependencyCount: number;
+    changedDependencyCount: number;
+    upgradedDependencyCount: number;
+    downgradedDependencyCount: number;
     addedFindingsCount: number;
     removedFindingsCount: number;
+    introducedVulnerabilityCount: number;
+    resolvedVulnerabilityCount: number;
+    introducedTrustIntegrityFindingCount: number;
+    removedTrustIntegrityFindingCount: number;
   };
 }

@@ -20,12 +20,12 @@ interface PersistedScanMetadataFile {
 export class JsonFileStorageAdapter implements StorageAdapter {
   private readonly scansDir: string;
   private readonly comparisonsDir: string;
-  private readonly reportsDir: string;
+  //private readonly reportsDir: string;
 
   public constructor(private readonly rootDir: string) {
     this.scansDir = path.join(rootDir, "scans");
     this.comparisonsDir = path.join(rootDir, "comparisons");
-    this.reportsDir = path.join(rootDir, "reports");
+    //this.reportsDir = path.join(rootDir, "reports");
   }
 
   public getRootDirectory(): string {
@@ -97,6 +97,36 @@ export class JsonFileStorageAdapter implements StorageAdapter {
     const scanDir = await this.createScanDirectory(repositorySlug, scanId);
     const filePath = path.join(scanDir, "summary.json");
     await this.writeJson(filePath, summary);
+  }
+
+  public async saveScanReport(
+    repositorySlug: string,
+    scanId: string,
+    markdown: string
+  ): Promise<void> {
+    const scanDir = await this.createScanDirectory(repositorySlug, scanId);
+    const filePath = path.join(scanDir, "report.md");
+    await this.writeText(filePath, markdown);
+  }
+
+  public async saveComparison(report: ComparisonReport): Promise<void> {
+    await this.ensureDirectories();
+    const comparisonDir = this.getComparisonDirectory(report.repositorySlug);
+    await mkdir(comparisonDir, { recursive: true });
+    const filePath = path.join(comparisonDir, `${report.id}.json`);
+    await this.writeJson(filePath, report);
+  }
+
+  public async saveComparisonReport(
+    repositorySlug: string,
+    comparisonId: string,
+    markdown: string
+  ): Promise<void> {
+    await this.ensureDirectories();
+    const comparisonDir = this.getComparisonDirectory(repositorySlug);
+    await mkdir(comparisonDir, { recursive: true });
+    const filePath = path.join(comparisonDir, `${comparisonId}.md`);
+    await this.writeText(filePath, markdown);
   }
 
   public async getScan(scanId: string): Promise<ScanRecord> {
@@ -173,57 +203,10 @@ export class JsonFileStorageAdapter implements StorageAdapter {
         }
 
         const scanDir = path.join(repositoryPath, scanEntry.name);
-        const metadataFilePath = path.join(scanDir, "metadata.json");
-        const dependencyGraphPath = path.join(scanDir, "dependency-graph.json");
-        const findingsPath = path.join(scanDir, "findings.json");
-        const summaryPath = path.join(scanDir, "summary.json");
+        const scan = await this.tryLoadScanFromDirectory(scanDir);
 
-        try {
-          const persisted = await this.readJson<PersistedScanMetadataFile>(
-            metadataFilePath,
-            `Unable to read scan metadata file: ${metadataFilePath}`
-          );
-
-          const dependencyGraph = (await pathExists(dependencyGraphPath))
-            ? await this.readJson<DependencyGraphRecord>(
-                dependencyGraphPath,
-                `Unable to read dependency graph file: ${dependencyGraphPath}`
-              )
-            : undefined;
-
-          const findings = (await pathExists(findingsPath))
-            ? await this.readJson<Finding[]>(
-                findingsPath,
-                `Unable to read findings file: ${findingsPath}`
-              )
-            : [];
-
-          const storedSummary = (await pathExists(summaryPath))
-            ? await this.readJson<ScanSummary>(
-                summaryPath,
-                `Unable to read summary file: ${summaryPath}`
-              )
-            : undefined;
-
-          const components = dependencyGraph?.components ?? [];
-          const dependencyEdges = dependencyGraph?.edges ?? [];
-          const summary =
-            storedSummary ??
-            buildScanSummary({
-              components,
-              findings
-            });
-
-          scans.push({
-            repository: persisted.repository,
-            metadata: persisted.metadata,
-            components,
-            dependencyEdges,
-            findings,
-            summary
-          });
-        } catch {
-          continue;
+        if (scan !== undefined) {
+          scans.push(scan);
         }
       }
     }
@@ -233,23 +216,108 @@ export class JsonFileStorageAdapter implements StorageAdapter {
     );
   }
 
-  public async saveComparison(report: ComparisonReport): Promise<void> {
-    await this.ensureDirectories();
-    const filePath = path.join(this.comparisonsDir, `${report.id}.json`);
-    await this.writeJson(filePath, report);
-  }
-
   public async getComparison(reportId: string): Promise<ComparisonReport> {
     await this.ensureDirectories();
-    const filePath = path.join(this.comparisonsDir, `${reportId}.json`);
-    return this.readJson<ComparisonReport>(
-      filePath,
-      `Comparison report not found: ${reportId}`
-    );
+
+    const repositoryEntries = await readdir(this.comparisonsDir, {
+      withFileTypes: true
+    });
+
+    for (const repositoryEntry of repositoryEntries) {
+      if (!repositoryEntry.isDirectory()) {
+        continue;
+      }
+
+      const filePath = path.join(
+        this.comparisonsDir,
+        repositoryEntry.name,
+        `${reportId}.json`
+      );
+
+      if (!(await pathExists(filePath))) {
+        continue;
+      }
+
+      return this.readJson<ComparisonReport>(
+        filePath,
+        `Comparison report not found: ${reportId}`
+      );
+    }
+
+    throw new StorageError(`Comparison report not found: ${reportId}`, {
+      details: { reportId }
+    });
   }
 
   private getScanDirectory(repositorySlug: string, scanId: string): string {
     return path.join(this.scansDir, repositorySlug, scanId);
+  }
+
+  private getComparisonDirectory(repositorySlug: string): string {
+    return path.join(this.comparisonsDir, repositorySlug);
+  }
+
+  private async tryLoadScanFromDirectory(
+    scanDir: string
+  ): Promise<ScanRecord | undefined> {
+    const metadataFilePath = path.join(scanDir, "metadata.json");
+    const dependencyGraphPath = path.join(scanDir, "dependency-graph.json");
+    const findingsPath = path.join(scanDir, "findings.json");
+    const summaryPath = path.join(scanDir, "summary.json");
+
+    try {
+      const persisted = await this.readJson<PersistedScanMetadataFile>(
+        metadataFilePath,
+        `Unable to read scan metadata file: ${metadataFilePath}`
+      );
+
+      const dependencyGraph = await this.readOptionalJson<DependencyGraphRecord>(
+        dependencyGraphPath,
+        `Unable to read dependency graph file: ${dependencyGraphPath}`
+      );
+
+      const findings =
+        (await this.readOptionalJson<Finding[]>(
+          findingsPath,
+          `Unable to read findings file: ${findingsPath}`
+        )) ?? [];
+
+      const storedSummary = await this.readOptionalJson<ScanSummary>(
+        summaryPath,
+        `Unable to read summary file: ${summaryPath}`
+      );
+
+      const components = dependencyGraph?.components ?? [];
+      const dependencyEdges = dependencyGraph?.edges ?? [];
+      const summary =
+        storedSummary ??
+        buildScanSummary({
+          components,
+          findings
+        });
+
+      return {
+        repository: persisted.repository,
+        metadata: persisted.metadata,
+        components,
+        dependencyEdges,
+        findings,
+        summary
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async readOptionalJson<T>(
+    filePath: string,
+    message: string
+  ): Promise<T | undefined> {
+    if (!(await pathExists(filePath))) {
+      return undefined;
+    }
+
+    return this.readJson<T>(filePath, message);
   }
 
   private async findScanMetadataFile(scanId: string): Promise<string> {
@@ -285,7 +353,7 @@ export class JsonFileStorageAdapter implements StorageAdapter {
       mkdir(this.rootDir, { recursive: true }),
       mkdir(this.scansDir, { recursive: true }),
       mkdir(this.comparisonsDir, { recursive: true }),
-      mkdir(this.reportsDir, { recursive: true })
+      //mkdir(this.reportsDir, { recursive: true })
     ]);
   }
 
@@ -307,6 +375,17 @@ export class JsonFileStorageAdapter implements StorageAdapter {
       await writeFile(filePath, raw, "utf-8");
     } catch (error: unknown) {
       throw new StorageError("Failed to write JSON file", {
+        cause: error,
+        details: { filePath }
+      });
+    }
+  }
+
+  private async writeText(filePath: string, value: string): Promise<void> {
+    try {
+      await writeFile(filePath, value, "utf-8");
+    } catch (error: unknown) {
+      throw new StorageError("Failed to write text file", {
         cause: error,
         details: { filePath }
       });

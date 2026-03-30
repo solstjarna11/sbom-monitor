@@ -65,12 +65,28 @@ export function findingFingerprint(finding: Finding): string {
   ].join("::");
 }
 
-export function comparisonSummary(report: ComparisonReport): ComparisonReport["summary"] {
+export function comparisonSummary(
+  report: ComparisonReport
+): ComparisonReport["summary"] {
   return {
-    newComponentCount: report.newComponents.length,
-    removedComponentCount: report.removedComponents.length,
-    changedComponentCount: report.changedComponents.length,
+    addedDependencyCount: report.addedDependencies.length,
+    removedDependencyCount: report.removedDependencies.length,
+    changedDependencyCount: report.changedDependencies.length,
+    upgradedDependencyCount: report.changedDependencies.filter(
+      (change) => change.changeType === "upgraded"
+    ).length,
+    downgradedDependencyCount: report.changedDependencies.filter(
+      (change) => change.changeType === "downgraded"
+    ).length,
     addedFindingsCount: report.findingsDelta.added.length,
-    removedFindingsCount: report.findingsDelta.removed.length
+    removedFindingsCount: report.findingsDelta.removed.length,
+    introducedVulnerabilityCount:
+      report.findingsDelta.introducedVulnerabilities.length,
+    resolvedVulnerabilityCount:
+      report.findingsDelta.resolvedVulnerabilities.length,
+    introducedTrustIntegrityFindingCount:
+      report.findingsDelta.introducedTrustAndIntegrityFindings.length,
+    removedTrustIntegrityFindingCount:
+      report.findingsDelta.removedTrustAndIntegrityFindings.length
   };
 }

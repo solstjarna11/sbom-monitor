@@ -2,38 +2,51 @@ import { Command } from "commander";
 import { ReportService } from "../services/report-service";
 import { JsonFileStorageAdapter } from "../storage/json-file-storage-adapter";
 import { getDefaultDataRoot } from "../utils/paths";
-import { logger } from "../utils/logger";
+import { ValidationError } from "../utils/errors";
 
 export function createReportCommand(): Command {
   const command = new Command("report");
 
   command
-    .description("Generate a JSON report for a persisted scan")
-    .requiredOption("--scan <scanId>", "Scan id to report on")
+    .description("Generate a Markdown report for a stored scan or comparison")
+    .option("--scan <scanId>", "Scan id to report on")
+    .option("--comparison <comparisonId>", "Comparison report id to render")
     .option(
       "--storage-root <path>",
       "Root directory for JSON storage",
       getDefaultDataRoot()
     )
     .action(async (options: ReportCommandOptions) => {
+      const selectedCount =
+        Number(options.scan !== undefined) +
+        Number(options.comparison !== undefined);
+
+      if (selectedCount !== 1) {
+        throw new ValidationError(
+          "Provide exactly one of --scan or --comparison."
+        );
+      }
+
       const storage = new JsonFileStorageAdapter(options.storageRoot);
       const service = new ReportService(storage);
 
-      const report = await service.generateScanReport(options.scan);
+      if (options.scan !== undefined) {
+        const result = await service.generateScanReport(options.scan);
+        process.stdout.write(`${result.markdown}\n`);
+        return;
+      }
 
-      logger.info("Report generated", {
-        scanId: report.metadata.id,
-        totalComponents: report.summary.totalComponents,
-        totalFindings: report.summary.totalFindings
-      });
-
-      process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+      const result = await service.generateComparisonReport(
+        options.comparison as string
+      );
+      process.stdout.write(`${result.markdown}\n`);
     });
 
   return command;
 }
 
 interface ReportCommandOptions {
-  scan: string;
+  scan?: string;
+  comparison?: string;
   storageRoot: string;
 }

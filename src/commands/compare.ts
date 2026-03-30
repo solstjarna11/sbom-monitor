@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { ComparisonService } from "../services/comparison-service";
+import { ReportService } from "../services/report-service";
 import { JsonFileStorageAdapter } from "../storage/json-file-storage-adapter";
 import { getDefaultDataRoot } from "../utils/paths";
 import { logger } from "../utils/logger";
@@ -18,22 +19,26 @@ export function createCompareCommand(): Command {
     )
     .action(async (options: CompareCommandOptions) => {
       const storage = new JsonFileStorageAdapter(options.storageRoot);
-      const service = new ComparisonService(storage);
+      const comparisonService = new ComparisonService(storage);
+      const reportService = new ReportService(storage);
 
-      const report = await service.compareScans(
+      const comparison = await comparisonService.compareScans(
         options.baseline,
         options.target
       );
 
+      await reportService.generateComparisonReportFromReport(comparison);
+
       logger.info("Comparison completed", {
-        baselineScanId: report.baselineScanId,
-        targetScanId: report.targetScanId,
-        newComponents: report.newComponents.length,
-        removedComponents: report.removedComponents.length,
-        changedComponents: report.changedComponents.length
+        comparisonId: comparison.id,
+        addedDependencies: comparison.summary.addedDependencyCount,
+        removedDependencies: comparison.summary.removedDependencyCount,
+        changedDependencies: comparison.summary.changedDependencyCount,
+        introducedVulnerabilities:
+          comparison.summary.introducedVulnerabilityCount
       });
 
-      process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+      process.stdout.write(`${JSON.stringify(comparison, null, 2)}\n`);
     });
 
   return command;

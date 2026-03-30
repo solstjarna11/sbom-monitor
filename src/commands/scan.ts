@@ -16,6 +16,10 @@ export function createScanCommand(): Command {
       "Optional scan identifier; defaults to a timestamp-based id"
     )
     .option(
+      "--selected-ref <ref>",
+      "Optional git branch, tag, or commit hash to scan"
+    )
+    .option(
       "--storage-root <path>",
       "Root directory for JSON storage",
       getDefaultDataRoot()
@@ -36,10 +40,15 @@ export function createScanCommand(): Command {
         input.scanId = options.scanId;
       }
 
+      if (options.selectedRef !== undefined) {
+        input.selectedRef = options.selectedRef;
+      }
+
       const result = await service.createInitialScan(input);
 
       logger.info("Scan completed", {
         scanId: result.metadata.id,
+        selectedRef: result.metadata.selectedRef,
         repository: result.repository.name,
         findings: result.summary.findingsBySeverity
       });
@@ -54,6 +63,7 @@ interface ScanCommandOptions {
   repo: string;
   repoName?: string;
   scanId?: string;
+  selectedRef?: string;
   storageRoot: string;
 }
 
@@ -61,4 +71,5 @@ interface CreateInitialScanCommandInput {
   repositoryPath: string;
   repositoryName?: string;
   scanId?: string;
+  selectedRef?: string;
 }

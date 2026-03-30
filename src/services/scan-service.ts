@@ -80,6 +80,7 @@ export class ScanService {
 
     const metadata: ScanMetadata = {
       id: scanId,
+      selectedRef: preparedRepository.repository.selectedRef,
       repositoryId: preparedRepository.repository.id,
       scanRoot,
       startedAt: scanTimestamp,

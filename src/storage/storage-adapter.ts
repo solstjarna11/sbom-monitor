@@ -30,8 +30,18 @@ export interface StorageAdapter {
     scanId: string,
     summary: ScanSummary
   ): Promise<void>;
+  saveScanReport(
+    repositorySlug: string,
+    scanId: string,
+    markdown: string
+  ): Promise<void>;
+  saveComparison(report: ComparisonReport): Promise<void>;
+  saveComparisonReport(
+    repositorySlug: string,
+    comparisonId: string,
+    markdown: string
+  ): Promise<void>;
   getScan(scanId: string): Promise<ScanRecord>;
   listScans(): Promise<ScanRecord[]>;
-  saveComparison(report: ComparisonReport): Promise<void>;
   getComparison(reportId: string): Promise<ComparisonReport>;
 }
