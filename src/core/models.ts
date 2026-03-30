@@ -1,3 +1,5 @@
+// src/core/models.ts
+
 import {
   ComparisonReport,
   Finding,

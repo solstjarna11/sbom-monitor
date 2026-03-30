@@ -7,3 +7,4 @@ data/comparisons/*.json
 instructions/
 artifacts/
 tmp*/
+.DS_Store

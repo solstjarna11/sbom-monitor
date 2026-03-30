@@ -19,7 +19,7 @@ export class ScanService {
   private readonly dependencyGraphProvider = new NpmDependencyGraphProvider();
   private readonly analyzerEngine = new AnalyzerEngine();
 
-  public constructor(private readonly storage: StorageAdapter) {}
+  public constructor(private readonly storage: StorageAdapter) { }
 
   public async createInitialScan(
     input: CreateInitialScanInput
@@ -91,8 +91,7 @@ export class ScanService {
         "Repository prepared.",
         "CycloneDX SBOM generated for npm project when available.",
         "Normalized dependency graph generated from npm lockfile or dependency tree.",
-        "A03-oriented analysis completed (necessity, vulnerabilities, maintenance, source trust)."
-      ]
+        "A03/A08-oriented analysis completed (necessity, vulnerabilities, maintenance, source trust, integrity)."]
     };
 
     const scan: ScanRecord = {
