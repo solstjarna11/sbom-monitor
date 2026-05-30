@@ -1,7 +1,9 @@
 import { Command } from "commander";
+import process from "node:process";
 import { createScanCommand } from "./commands/scan";
 import { createCompareCommand } from "./commands/compare";
 import { createReportCommand } from "./commands/report";
+import { createGraphCommand } from "./commands/graph";
 import { AppError, UnknownCliError } from "./utils/errors";
 import { logger } from "./utils/logger";
 
@@ -16,6 +18,7 @@ export async function runCli(argv: string[]): Promise<void> {
   program.addCommand(createScanCommand());
   program.addCommand(createCompareCommand());
   program.addCommand(createReportCommand());
+  program.addCommand(createGraphCommand());
 
   try {
     await program.parseAsync(argv);

@@ -41,7 +41,18 @@ export interface StorageAdapter {
     comparisonId: string,
     markdown: string
   ): Promise<void>;
+  saveScanTextArtifact(
+    scanId: string,
+    filename: string,
+    content: string
+  ): Promise<string>;
+  saveScanBinaryArtifact(
+    scanId: string,
+    filename: string,
+    content: Uint8Array
+  ): Promise<string>;
   getScan(scanId: string): Promise<ScanRecord>;
   listScans(): Promise<ScanRecord[]>;
   getComparison(reportId: string): Promise<ComparisonReport>;
+  getDependencyGraph(scanId: string): Promise<DependencyGraphRecord>;
 }

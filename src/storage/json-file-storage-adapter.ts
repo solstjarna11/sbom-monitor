@@ -20,12 +20,10 @@ interface PersistedScanMetadataFile {
 export class JsonFileStorageAdapter implements StorageAdapter {
   private readonly scansDir: string;
   private readonly comparisonsDir: string;
-  //private readonly reportsDir: string;
 
   public constructor(private readonly rootDir: string) {
     this.scansDir = path.join(rootDir, "scans");
     this.comparisonsDir = path.join(rootDir, "comparisons");
-    //this.reportsDir = path.join(rootDir, "reports");
   }
 
   public getRootDirectory(): string {
@@ -127,6 +125,28 @@ export class JsonFileStorageAdapter implements StorageAdapter {
     await mkdir(comparisonDir, { recursive: true });
     const filePath = path.join(comparisonDir, `${comparisonId}.md`);
     await this.writeText(filePath, markdown);
+  }
+
+  public async saveScanTextArtifact(
+    scanId: string,
+    filename: string,
+    content: string
+  ): Promise<string> {
+    const scanDir = await this.getScanArtifactDirectory(scanId);
+    const filePath = path.join(scanDir, filename);
+    await this.writeText(filePath, content);
+    return filePath;
+  }
+
+  public async saveScanBinaryArtifact(
+    scanId: string,
+    filename: string,
+    content: Uint8Array
+  ): Promise<string> {
+    const scanDir = await this.getScanArtifactDirectory(scanId);
+    const filePath = path.join(scanDir, filename);
+    await this.writeBinary(filePath, content);
+    return filePath;
   }
 
   public async getScan(scanId: string): Promise<ScanRecord> {
@@ -249,12 +269,33 @@ export class JsonFileStorageAdapter implements StorageAdapter {
     });
   }
 
+  public async getDependencyGraph(scanId: string): Promise<DependencyGraphRecord> {
+    const scanDir = await this.getScanArtifactDirectory(scanId);
+    const filePath = path.join(scanDir, "dependency-graph.json");
+
+    if (!(await pathExists(filePath))) {
+      throw new StorageError(`Dependency graph not found for scan: ${scanId}`, {
+        details: { scanId, filePath }
+      });
+    }
+
+    return this.readJson<DependencyGraphRecord>(
+      filePath,
+      `Dependency graph not found for scan: ${scanId}`
+    );
+  }
+
   private getScanDirectory(repositorySlug: string, scanId: string): string {
     return path.join(this.scansDir, repositorySlug, scanId);
   }
 
   private getComparisonDirectory(repositorySlug: string): string {
     return path.join(this.comparisonsDir, repositorySlug);
+  }
+
+  private async getScanArtifactDirectory(scanId: string): Promise<string> {
+    const metadataFilePath = await this.findScanMetadataFile(scanId);
+    return path.dirname(metadataFilePath);
   }
 
   private async tryLoadScanFromDirectory(
@@ -353,7 +394,6 @@ export class JsonFileStorageAdapter implements StorageAdapter {
       mkdir(this.rootDir, { recursive: true }),
       mkdir(this.scansDir, { recursive: true }),
       mkdir(this.comparisonsDir, { recursive: true }),
-      //mkdir(this.reportsDir, { recursive: true })
     ]);
   }
 
@@ -386,6 +426,17 @@ export class JsonFileStorageAdapter implements StorageAdapter {
       await writeFile(filePath, value, "utf-8");
     } catch (error: unknown) {
       throw new StorageError("Failed to write text file", {
+        cause: error,
+        details: { filePath }
+      });
+    }
+  }
+
+  private async writeBinary(filePath: string, value: Uint8Array): Promise<void> {
+    try {
+      await writeFile(filePath, value);
+    } catch (error: unknown) {
+      throw new StorageError("Failed to write binary file", {
         cause: error,
         details: { filePath }
       });

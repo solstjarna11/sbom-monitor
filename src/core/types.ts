@@ -64,7 +64,7 @@ export interface ScanMetadata {
   status: "prepared" | "completed" | "failed";
   toolVersion: string;
   scannerName: string;
-  notes?: string[] | undefined;
+  notes?: string[];
 }
 
 export interface ComponentRecord {
@@ -174,4 +174,15 @@ export interface ComparisonReport {
     introducedTrustIntegrityFindingCount: number;
     removedTrustIntegrityFindingCount: number;
   };
+}
+
+export interface GraphGenerationResult {
+  scanId: string;
+  scanRoot: string;
+  dotPath: string;
+  svgPath?: string;
+  renderedSvg: boolean;
+  warning?: string;
+  nodeCount: number;
+  edgeCount: number;
 }
